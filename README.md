@@ -15,9 +15,13 @@ Due to the nature of WebRTC the following audio and video formats are required
 #### Audio
  - Opus at 48khz
 
-#### video
+`ffmpeg -i input-video.avi -vn -c:a libopus -b:a 160K -ac 2 output-audio.opus`
+
+#### Video
  - H.264 (most profiles are supported including baseline, main and high)
  - for the lowest delay B Frames should be disabled
+
+`ffmpeg -i input-video.avi -an -c:v libx264 -b:v 5000K -tune zerolatency --no-psy output-video.h264`
 
 ### Building
 
@@ -55,13 +59,8 @@ msbuild /p:Configuration=Release ALL_BUILD.vcxproj OR open libftl.sln in Visual 
 
 ### Running Test Application
 
-download the following test files:
-
- - sintel.h264: https://www.dropbox.com/s/ruijibs0lgjnq51/sintel.h264
- - sintel.opus: https://www.dropbox.com/s/s2r6lggopt9ftw5/sintel.opus
-
 In the directory containing ftl_app
 
 ```
-ftl_app -i auto -s "<mixer stream key>" -v path\to\sintel.h264 -a path\to\sintel.opus -f 24
+ftl_app -i auto -s "<mixer stream key>" -v output-video.h264 -a output-audio.opus -f 24
 ```
