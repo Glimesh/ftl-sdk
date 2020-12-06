@@ -53,7 +53,7 @@ void log_test(ftl_log_severity_t log_level, const char *message)
 
 void usage()
 {
-  printf("Usage: ftl_app -i <ingest uri> -s <stream_key> - v <h264_annex_b_file> -a <opus in ogg container>\n");
+  printf("Usage: ftl_app -i <ingest uri> -s <stream_key> -v <h264_annex_b_file> -a <opus in ogg container>\n");
   exit(0);
 }
 
