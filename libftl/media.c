@@ -409,17 +409,17 @@ void _update_timestamp(ftl_stream_configuration_private_t *ftl, ftl_media_compon
 ftl_status_t media_speed_test(ftl_stream_configuration_private_t *ftl, int speed_kbps, int duration_ms, speed_test_t *results) {
   ftl_media_component_common_t *mc = &ftl->audio.media_component;
   ftl_media_config_t *media = &ftl->media;
-  int64_t bytes_sent = 0;
+  int bytes_sent = 0;
   int error = 0;
   int effective_kbps = -1;
   ftl_status_t retval = FTL_SPEED_TEST_ABORTED;
   int transmit_level = 5 * speed_kbps * 1000 / 8 / 1000; /*small initial level to prevent bursting at the start of a stream*/;
   unsigned char data[MAX_MTU];
   int bytes_per_ms;
-  int64_t total_ms = 0;
-  struct timeval stop_tv, start_tv, delta_tv, sendToTimeLoopTime_tv;
+  int elapsed_ms = 0;
+  int send_blocked_time_ms = 0;
+  struct timeval start_tv, xmit_level_tv;
   float packet_loss = 0.f;
-  int64_t ms_elapsed;
   int64_t total_sent = 0;
   int64_t pkts_sent = 0;
   ping_pkt_t *ping;
