@@ -4,7 +4,20 @@
 #include <assert.h>
 
 #define MAX_RTT_FACTOR 1.3
+
+#define NSEC_IN_SEC 1000000000
 #define USEC_IN_SEC 1000000
+#define MSEC_IN_SEC 1000
+#define MSEC_IN_USEC 1000
+#define MSEC_IN_NSEC 1000000
+
+#define USEC_TO_SEC(x) ((x) / USEC_IN_SEC)
+#define USEC_TO_MSEC(x) ((x) / MSEC_IN_USEC)
+#define MSEC_TO_SEC(x) ((x) / MSEC_IN_SEC)
+#define MSEC_TO_USEC(x) (((uint64_t)x) * MSEC_IN_USEC)
+#define MSEC_TO_NSEC(x) (((uint64_t)x) * MSEC_IN_NSEC)
+#define SEC_TO_USEC(x) (((uint64_t)x) * USEC_IN_SEC)
+#define SEC_TO_NSEC(x) (((uint64_t)x) * NSEC_IN_SEC)
 
 OS_THREAD_ROUTINE video_send_thread(void *data);
 OS_THREAD_ROUTINE audio_send_thread(void *data);
