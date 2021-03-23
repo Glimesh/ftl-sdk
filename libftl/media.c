@@ -1308,13 +1308,16 @@ static void _update_xmit_level(ftl_stream_configuration_private_t *ftl, int *tra
 
   gettimeofday(&stop_tv, NULL);
 
-  *transmit_level += (int)timeval_subtract_to_ms(&stop_tv, start_tv) * bytes_per_ms;
+  int elapsed_ms = (int)timeval_subtract_to_ms(&stop_tv, start_tv);
+
+  if (elapsed_ms > 0) {
+    *transmit_level += elapsed_ms * bytes_per_ms;
+    *start_tv = stop_tv;
+  }
 
   if (*transmit_level > (MAX_XMIT_LEVEL_IN_MS * bytes_per_ms)) {
     *transmit_level = MAX_XMIT_LEVEL_IN_MS * bytes_per_ms;
   }
-
-  *start_tv = stop_tv;
 }
 
 static int _update_stats(ftl_stream_configuration_private_t *ftl) {
