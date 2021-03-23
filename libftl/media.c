@@ -1201,9 +1201,17 @@ OS_THREAD_ROUTINE video_send_thread(void *data)
   int video_kbps = -1;
   int disable_flow_control = 1;
   int initial_peak_kbps;
+  int64_t packet_counter = 0;
+  int64_t send_time_counter_us = 0;
+  int64_t transmit_counter_bytes = 0;
+  int64_t sleep_time_counter_us = 0;
 
   int transmit_level;
-  struct timeval start_tv;
+  struct timeval xmit_level_tv;
+  struct timeval counter_start_tv;
+
+  gettimeofday(&xmit_level_tv, NULL);
+  gettimeofday(&counter_start_tv, NULL);
 
 #ifdef _WIN32
   if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL)) {
@@ -1219,16 +1227,18 @@ OS_THREAD_ROUTINE video_send_thread(void *data)
 
     if (initial_peak_kbps != video->peak_kbps) {
       initial_peak_kbps = video->kbps = video->peak_kbps;
+      bytes_per_ms = video->peak_kbps * 1000 / 8 / 1000;
+      FTL_LOG(ftl, FTL_LOG_DEBUG, "Peak video kbps changed to %d, bytes_per_ms:%d, window_size:%d\n", video->peak_kbps, bytes_per_ms, MAX_XMIT_LEVEL_IN_MS);
     }
 
     if (video->kbps != video_kbps) {
-      bytes_per_ms = video->kbps * 1000 / 8 / 1000;
       video_kbps = video->kbps;
 
       disable_flow_control = 0;
       if (video_kbps <= 0) {
         disable_flow_control = 1;
       }
+      FTL_LOG(ftl, FTL_LOG_DEBUG, "Video kbps changed to %d, flow control disabled:%d\n", video->kbps, disable_flow_control);
     }
 
     os_semaphore_pend(&video->pkt_ready, FOREVER);
@@ -1238,27 +1248,84 @@ OS_THREAD_ROUTINE video_send_thread(void *data)
     }
 
     if (disable_flow_control) {
-      _media_send_packet(ftl, video);
+      packet_counter++;
+      if (packet_counter % 10000 == 0) {
+        struct timeval counter_stop_tv;
+        gettimeofday(&counter_stop_tv, NULL);
+        int64_t transmitted_avg = transmit_counter_bytes / 10000;
+        int64_t inter_packet_avg = timeval_subtract_to_us(&counter_stop_tv, &counter_start_tv) / 10000;
+        int64_t send_time_avg = send_time_counter_us / 10000;
+        FTL_LOG(ftl, FTL_LOG_DEBUG, "Timing for 10,000 packets, avg_interval:%d us, avg_send_time:%d us, avg_size:%d bytes", inter_packet_avg, send_time_avg, transmitted_avg);
+        counter_start_tv = counter_stop_tv;
+        send_time_counter_us = 0;
+        transmit_counter_bytes = 0;
+      }
+
+      struct timeval send_start_tv, send_end_tv;
+      gettimeofday(&send_start_tv, NULL);
+      int bytes_sent = _media_send_packet(ftl, video);
+      transmit_counter_bytes += bytes_sent;
+      gettimeofday(&send_end_tv, NULL);
+      int64_t send_time_us = timeval_subtract_to_us(&send_end_tv, &send_start_tv);
+      if (send_time_us > 250) {
+        FTL_LOG(ftl, FTL_LOG_INFO, "Slow send, took %d us, bytes sent %d", send_time_us, bytes_sent);
+      }
+      // FTL_LOG(ftl, FTL_LOG_INFO, "Send time %d us", send_time_us);
+      send_time_counter_us += send_time_us;
     }
     else {
       pkt_sent = 0;
       if (first_packet) {
-        gettimeofday(&start_tv, NULL);
+        gettimeofday(&xmit_level_tv, NULL);
         first_packet = 0;
       }
 
-      _update_xmit_level(ftl, &transmit_level, &start_tv, bytes_per_ms);
       while (!pkt_sent && ftl_get_state(ftl, FTL_TX_THRD)) {
+          _update_xmit_level(ftl, &transmit_level, &xmit_level_tv, bytes_per_ms);
 
         if (transmit_level <= 0) {
           ftl->video.media_component.stats.bw_throttling_count++;
-          sleep_ms(MAX_MTU / bytes_per_ms + 1);
-          _update_xmit_level(ftl, &transmit_level, &start_tv, bytes_per_ms);
+
+          struct timeval sleep_start_tv, sleep_stop_tv;
+          gettimeofday(&sleep_start_tv, NULL);
+
+          //FTL_LOG(ftl, FTL_LOG_DEBUG, "Throttled because transmit_level:%d <= 0", transmit_level);
+          sleep_ms(SEND_SLEEP_TIME_MS);
+          
+          gettimeofday(&sleep_stop_tv, NULL);
+
+          sleep_time_counter_us += timeval_subtract_to_us(&sleep_stop_tv, &sleep_start_tv);
         }
 
         if (transmit_level > 0) {
-          transmit_level -= _media_send_packet(ftl, video);
+          packet_counter++;
+          if (packet_counter % 10000 == 0) {
+            struct timeval counter_stop_tv;
+            gettimeofday(&counter_stop_tv, NULL);
+            int64_t transmitted_avg = transmit_counter_bytes / 10000;
+            int64_t inter_packet_avg = timeval_subtract_to_us(&counter_stop_tv, &counter_start_tv) / 10000;
+            int64_t send_time_avg = send_time_counter_us / 10000;
+	          FTL_LOG(ftl, FTL_LOG_DEBUG, "Timing for 10,000 packets, avg_interval:%d us, avg_send_time:%d us, avg_size:%d bytes, sleep_time: %d ms, time: %d ms", inter_packet_avg, send_time_avg, transmitted_avg, USEC_TO_MSEC(sleep_time_counter_us), get_ms_elapsed_since(&counter_start_tv));
+            counter_start_tv = counter_stop_tv;
+            send_time_counter_us = 0;
+            transmit_counter_bytes = 0;
+            sleep_time_counter_us = 0;
+          }
+
+          struct timeval send_start_tv, send_end_tv;
+          gettimeofday(&send_start_tv, NULL);
+
+          int bytes_sent = _media_send_packet(ftl, video);
           pkt_sent = 1;
+          transmit_level -= bytes_sent;
+
+          transmit_counter_bytes += bytes_sent;
+          gettimeofday(&send_end_tv, NULL);
+          int64_t send_time_us = timeval_subtract_to_us(&send_end_tv, &send_start_tv);
+          if (send_time_us > 500) {
+            FTL_LOG(ftl, FTL_LOG_WARN, "Slow send, took %d us, bytes sent %d", send_time_us, bytes_sent);
+          }
+          send_time_counter_us += send_time_us;
         }
       }
 
