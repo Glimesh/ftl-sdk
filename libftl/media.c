@@ -465,46 +465,40 @@ ftl_status_t media_speed_test(ftl_stream_configuration_private_t *ftl, int speed
   int64_t initial_nack_cnt = mc->stats.nack_requests;
 
   gettimeofday(&start_tv, NULL);
+  gettimeofday(&xmit_level_tv, NULL);
 
   bytes_per_ms = speed_kbps * 1000 / 8 / 1000;
 
-  while (total_ms < duration_ms && !error) {
+  while (elapsed_ms < duration_ms && !error) {
 
     if (transmit_level <= 0) {
-      sleep_ms(MAX_MTU / bytes_per_ms + 1);
+      FTL_LOG(ftl, FTL_LOG_DEBUG, "Sleep for %d", SEND_SLEEP_TIME_MS);
+      sleep_ms(SEND_SLEEP_TIME_MS);
     }
 
-    gettimeofday(&stop_tv, NULL);
-    timeval_subtract(&delta_tv, &stop_tv, &start_tv);
-    ms_elapsed = (int64_t)timeval_to_ms(&delta_tv);
-    transmit_level += ms_elapsed * bytes_per_ms;
-    total_ms += ms_elapsed;
-
-    start_tv = stop_tv;
+    _update_xmit_level(ftl, &transmit_level, &xmit_level_tv, bytes_per_ms);
 
     while (transmit_level > 0) {
       pkts_sent++;
+
+    struct timeval send_start_tv;
+      gettimeofday(&send_start_tv, NULL);
       if ((bytes_sent = media_send_audio(ftl, 0, data, sizeof(data))) < sizeof(data)) {
         error = 1;
         break;
       }
 
+      total_sent += bytes_sent;
+      transmit_level -= bytes_sent;
+
       // Sendto (which is called in media_send_audio) can block if the computer's network connection is bad
       // and the local OS send buffer is full. We want this behavior when streaming normally for the send thread
       // to throttle the amount of data we send, but during the speed test this causes us to block the send loop and makes
       // the speed test too long and return inaccurate values.
-      gettimeofday(&sendToTimeLoopTime_tv, NULL);
-      timeval_subtract(&delta_tv, &sendToTimeLoopTime_tv, &start_tv);
-      int64_t ms_timeSinceLoopStart = (int64_t)timeval_to_ms(&delta_tv);
-      if (ms_timeSinceLoopStart + ms_elapsed > duration_ms)
-      {
-        total_ms = duration_ms;
-        break;
+      send_blocked_time_ms += get_ms_elapsed_since(&send_start_tv);
       }
 
-      total_sent += bytes_sent;
-      transmit_level -= bytes_sent;
-    }
+    elapsed_ms = get_ms_elapsed_since(&start_tv) - send_blocked_time_ms;
   }
 
   if (!error) {
@@ -536,13 +530,14 @@ ftl_status_t media_speed_test(ftl_stream_configuration_private_t *ftl, int speed
     if (wait_retries <= 0) {
       initial_rtt = 0;
       final_rtt = 2000;
+      FTL_LOG(ftl, FTL_LOG_WARN, "Did not recieve a response to the last ping packet, assuming the worst for round-trip time\n");
     }
 
     int64_t lost_pkts = mc->stats.nack_requests - initial_nack_cnt;
     float pkt_loss_percent = (float)lost_pkts / (float)pkts_sent;
 
     float adjusted_bytes_sent = (float)total_sent * (1.f - pkt_loss_percent);
-    int64_t actual_send_time = total_ms + final_rtt - initial_rtt;
+    int actual_send_time = elapsed_ms - send_blocked_time_ms + final_rtt - initial_rtt;
     effective_kbps = (int)(((float)adjusted_bytes_sent * 8.f * 1000.f / (float)actual_send_time) / 1000.f);
 
     results->pkts_sent = (int)pkts_sent;
@@ -552,8 +547,8 @@ ftl_status_t media_speed_test(ftl_stream_configuration_private_t *ftl, int speed
     results->duration_ms = (int)actual_send_time;
     results->peak_kbps = effective_kbps;
 
-    FTL_LOG(ftl, FTL_LOG_ERROR, "Sent %d bytes in %d ms; send packets %d lost %d packets; (first rtt: %d, last %d). Estimated peak bitrate %d kbps\n",
-      results->bytes_sent, results->duration_ms, results->pkts_sent, results->lost_pkts, initial_rtt, final_rtt, results->peak_kbps);
+    FTL_LOG(ftl, FTL_LOG_ERROR, "Sent %d bytes in %d ms (adjusted from %d); target %d kbps over %d ms; blocked time %d ms; sent packets %d, lost %d packets; first rtt: %d, last %d; estimated peak bitrate %d kbps\n",
+      results->bytes_sent, results->duration_ms, elapsed_ms, speed_kbps, duration_ms, send_blocked_time_ms, results->pkts_sent, results->lost_pkts, initial_rtt, final_rtt, results->peak_kbps);
 
     retval = FTL_SUCCESS;
   }
