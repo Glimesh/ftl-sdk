@@ -68,6 +68,8 @@
 #define NACK_RB_SIZE (8192) // must evenly divide 2^16
 #define NACK_RTT_AVG_SECONDS 5
 #define MAX_STATUS_MESSAGE_QUEUED 10
+#define MAX_FRAME_SIZE_ELEMENTS 64 // must be a minimum of 3
+#define MAX_XMIT_LEVEL_IN_MS 2 // allows a maximum burst size of 2ms at the peak bitrate
 #define SEND_SLEEP_TIME_MS 1
 #define VIDEO_RTP_TS_CLOCK_HZ 90000
 #define AUDIO_SAMPLE_RATE 48000
