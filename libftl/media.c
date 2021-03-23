@@ -413,7 +413,7 @@ ftl_status_t media_speed_test(ftl_stream_configuration_private_t *ftl, int speed
   int error = 0;
   int effective_kbps = -1;
   ftl_status_t retval = FTL_SPEED_TEST_ABORTED;
-  int64_t transmit_level = MAX_MTU;
+  int transmit_level = 5 * speed_kbps * 1000 / 8 / 1000; /*small initial level to prevent bursting at the start of a stream*/;
   unsigned char data[MAX_MTU];
   int bytes_per_ms;
   int64_t total_ms = 0;
