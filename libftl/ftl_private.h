@@ -65,7 +65,7 @@
 #define FTL_UDP_MEDIA_PORT 8082   //legacy port
 #define RTP_HEADER_BASE_LEN 12
 #define RTP_FUA_HEADER_LEN 2
-#define NACK_RB_SIZE (8192) // must evenly divide 2^16
+#define NACK_RB_SIZE (4096) // must evenly divide 2^16
 #define NACK_RTT_AVG_SECONDS 5
 #define MAX_STATUS_MESSAGE_QUEUED 10
 #define MAX_FRAME_SIZE_ELEMENTS 64 // must be a minimum of 3
