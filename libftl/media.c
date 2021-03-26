@@ -117,7 +117,7 @@ ftl_status_t media_init(ftl_stream_configuration_private_t *ftl) {
             return status;
     }
 
-    media->max_mtu = MAX_MTU;
+    media->mtu = MAX_MTU;
     gettimeofday(&media->stats_tv, NULL);
     media->sender_report_base_ntp.tv_usec = 0;
     media->sender_report_base_ntp.tv_sec = 0;
@@ -282,7 +282,7 @@ ftl_status_t _internal_media_destroy(ftl_stream_configuration_private_t *ftl) {
   ftl_media_component_common_t *audio_comp = &ftl->audio.media_component;
   _nack_destroy(audio_comp);
 
-  media->max_mtu = 0;
+  media->mtu = 0;
   os_delete_mutex(&media->mutex);
   os_delete_mutex(&ftl->audio.mutex);
   os_delete_mutex(&ftl->video.mutex);
@@ -975,7 +975,7 @@ static int _media_make_video_rtp_packet(ftl_stream_configuration_private_t *ftl,
   mc->seq_num++;
 
   //if this packet can fit into a it's own packet then just use single nalu mode
-  if (first_pkt && in_len <= (ftl->media.max_mtu - RTP_HEADER_BASE_LEN)) {
+  if (first_pkt && in_len <= (ftl->media.mtu - RTP_HEADER_BASE_LEN)) {
     frag_len = in_len;
     *out_len = frag_len + rtp_hdr_len;
     memcpy(out, in, frag_len);
@@ -988,7 +988,7 @@ static int _media_make_video_rtp_packet(ftl_stream_configuration_private_t *ftl,
       in += 1;
       in_len--;
     }
-    else if (in_len <= (ftl->media.max_mtu - RTP_HEADER_BASE_LEN - RTP_FUA_HEADER_LEN)) {
+    else if (in_len <= (ftl->media.mtu - RTP_HEADER_BASE_LEN - RTP_FUA_HEADER_LEN)) {
       ebit = 1;
     }
 
@@ -997,7 +997,7 @@ static int _media_make_video_rtp_packet(ftl_stream_configuration_private_t *ftl,
 
     out += 2;
 
-    frag_len = ftl->media.max_mtu - rtp_hdr_len - RTP_FUA_HEADER_LEN;
+    frag_len = ftl->media.mtu - rtp_hdr_len - RTP_FUA_HEADER_LEN;
 
     if (frag_len > in_len) {
       frag_len = in_len;
