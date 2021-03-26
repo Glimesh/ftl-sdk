@@ -403,7 +403,7 @@ void _update_timestamp(ftl_stream_configuration_private_t *ftl, ftl_media_compon
     ftl->media.sender_report_base_ntp.tv_usec == 0)
   {
     gettimeofday(&ftl->media.sender_report_base_ntp, NULL);
-    FTL_LOG(ftl, FTL_LOG_INFO, "Sender report base ntp time set to %llu us\n", mc->payload_type, timeval_to_us(&ftl->media.sender_report_base_ntp));
+    FTL_LOG(ftl, FTL_LOG_INFO, "Stream (%lu) base ntp time set to %llu us\n", mc->payload_type, timeval_to_us(&ftl->media.sender_report_base_ntp));
   }
 
   if (mc->base_dts_usec < 0) {
