@@ -494,7 +494,7 @@ ftl_status_t media_speed_test(ftl_stream_configuration_private_t *ftl, int speed
     while (transmit_level > 0) {
       pkts_sent++;
 
-    struct timeval send_start_tv;
+      struct timeval send_start_tv;
       gettimeofday(&send_start_tv, NULL);
       if ((bytes_sent = media_send_audio(ftl, 0, data, sizeof(data))) < sizeof(data)) {
         error = 1;
@@ -509,9 +509,9 @@ ftl_status_t media_speed_test(ftl_stream_configuration_private_t *ftl, int speed
       // to throttle the amount of data we send, but during the speed test this causes us to block the send loop and makes
       // the speed test too long and return inaccurate values.
       send_blocked_time_ms += get_ms_elapsed_since(&send_start_tv);
-      }
+    }
 
-    elapsed_ms = get_ms_elapsed_since(&start_tv) - send_blocked_time_ms;
+    elapsed_ms = get_ms_elapsed_since(&start_tv);
   }
 
   if (!error) {
