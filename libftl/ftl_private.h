@@ -61,7 +61,7 @@
 #define KEEPALIVE_SEND_WARN_TOLERANCE_MS 1000
 #define STATUS_THREAD_SLEEP_TIME_MS 500
 #define MAX_PACKET_BUFFER 1500  //Max length of buffer
-#define MAX_MTU 1183
+#define MAX_MTU 1212
 #define FTL_UDP_MEDIA_PORT 8082   //legacy port
 #define RTP_HEADER_BASE_LEN 12
 #define RTP_FUA_HEADER_LEN 2
