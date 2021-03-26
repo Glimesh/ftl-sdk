@@ -1213,7 +1213,7 @@ OS_THREAD_ROUTINE video_send_thread(void *data)
   int pkt_sent;
   int video_kbps = -1;
   int disable_flow_control = 1;
-  int initial_peak_kbps;
+  int initial_peak_kbps = 0;
   int64_t packet_counter = 0;
   int64_t send_time_counter_us = 0;
   int64_t transmit_counter_bytes = 0;
@@ -1232,7 +1232,6 @@ OS_THREAD_ROUTINE video_send_thread(void *data)
   }
 #endif
 
-  initial_peak_kbps = video->kbps = video->peak_kbps;
   video_kbps = 0;
   transmit_level = 5 * video->kbps * 1000 / 8 / 1000; /*small initial level to prevent bursting at the start of a stream*/
 
@@ -1241,7 +1240,7 @@ OS_THREAD_ROUTINE video_send_thread(void *data)
     if (initial_peak_kbps != video->peak_kbps) {
       initial_peak_kbps = video->kbps = video->peak_kbps;
       bytes_per_ms = video->peak_kbps * 1000 / 8 / 1000;
-      FTL_LOG(ftl, FTL_LOG_DEBUG, "Peak video kbps changed to %d, bytes_per_ms:%d, window_size:%d\n", video->peak_kbps, bytes_per_ms, MAX_XMIT_LEVEL_IN_MS);
+      FTL_LOG(ftl, FTL_LOG_DEBUG, "Peak video kbps set to %d, bytes_per_ms:%d, window_size:%d\n", video->peak_kbps, bytes_per_ms, MAX_XMIT_LEVEL_IN_MS);
     }
 
     if (video->kbps != video_kbps) {
@@ -1251,7 +1250,7 @@ OS_THREAD_ROUTINE video_send_thread(void *data)
       if (video_kbps <= 0) {
         disable_flow_control = 1;
       }
-      FTL_LOG(ftl, FTL_LOG_DEBUG, "Video kbps changed to %d, flow control disabled:%d\n", video->kbps, disable_flow_control);
+      FTL_LOG(ftl, FTL_LOG_DEBUG, "Video kbps set to %d, flow control disabled:%d\n", video->kbps, disable_flow_control);
     }
 
     os_semaphore_pend(&video->pkt_ready, FOREVER);
