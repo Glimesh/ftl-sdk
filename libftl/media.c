@@ -1223,11 +1223,11 @@ OS_THREAD_ROUTINE video_send_thread(void *data)
   while (1) {
 
     if (initial_peak_kbps != video->peak_kbps) {
+      bytes_per_ms = video->peak_kbps * 1000 / 8 / 1000;
       initial_peak_kbps = video->kbps = video->peak_kbps;
     }
 
     if (video->kbps != video_kbps) {
-      bytes_per_ms = video->kbps * 1000 / 8 / 1000;
       video_kbps = video->kbps;
 
       disable_flow_control = 0;
