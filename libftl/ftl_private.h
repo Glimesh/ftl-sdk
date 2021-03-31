@@ -67,7 +67,7 @@
 #define RTP_FUA_HEADER_LEN 2
 #define NACK_RB_SIZE (2048) //must be evenly divisible by 2^16
 #define NACK_RTT_AVG_SECONDS 5
-#define MAX_STATUS_MESSAGE_QUEUED 10
+#define MAX_STATUS_MESSAGE_QUEUED 100
 #define MAX_FRAME_SIZE_ELEMENTS 64 //must be a minimum of 3
 #define MAX_XMIT_LEVEL_IN_MS 100 //allows a maximum burst size of 100ms at the target bitrate
 #define VIDEO_RTP_TS_CLOCK_HZ 90000
