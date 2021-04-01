@@ -61,15 +61,15 @@
 #define KEEPALIVE_SEND_WARN_TOLERANCE_MS 1000
 #define STATUS_THREAD_SLEEP_TIME_MS 500
 #define MAX_PACKET_BUFFER 1500  //Max length of buffer
-#define MAX_MTU 1392
+#define MAX_MTU 1200 // Maximum allowed MTU value
 #define FTL_UDP_MEDIA_PORT 8082   //legacy port
 #define RTP_HEADER_BASE_LEN 12
 #define RTP_FUA_HEADER_LEN 2
-#define NACK_RB_SIZE (2048) //must be evenly divisible by 2^16
+#define NACK_RB_SIZE (4096) // must evenly divide 2^16
 #define NACK_RTT_AVG_SECONDS 5
-#define MAX_STATUS_MESSAGE_QUEUED 10
+#define MAX_STATUS_MESSAGE_QUEUED 100
 #define MAX_FRAME_SIZE_ELEMENTS 64 //must be a minimum of 3
-#define MAX_XMIT_LEVEL_IN_MS 100 //allows a maximum burst size of 100ms at the target bitrate
+#define MAX_XMIT_LEVEL_IN_MS 5 // allows a maximum burst size of 5ms at the peak bitrate
 #define VIDEO_RTP_TS_CLOCK_HZ 90000
 #define AUDIO_SAMPLE_RATE 48000
 #define AUDIO_PACKET_DURATION_MS 20
@@ -300,7 +300,7 @@ typedef struct {
   OS_THREAD_HANDLE audio_send_thread;
   OS_THREAD_HANDLE ping_thread;
   OS_SEMAPHORE ping_thread_shutdown;
-  int max_mtu;
+  int mtu;
   struct timeval stats_tv;
   int last_rtt_delay;
   struct timeval sender_report_base_ntp;
