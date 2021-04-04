@@ -44,8 +44,9 @@ int shutdown_socket(SOCKET sock, int how) {
   return shutdown(sock, how);
 }
 
-char * get_socket_error() {
-  return strerror(errno);
+char * get_socket_error(char* buf, size_t buflen) {
+  strerror_r(errno, buf, buflen);
+  return buf;
 }
 
 int set_socket_recv_timeout(SOCKET socket, int ms_timeout){

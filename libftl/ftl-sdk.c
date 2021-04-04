@@ -7,9 +7,7 @@
 #endif
 
 static BOOL _get_chan_id_and_key(const char *stream_key, uint32_t *chan_id, char *key);
-static int _lookup_ingest_ip(const char *ingest_location, char *ingest_ip);
 
-char error_message[1000];
 FTL_API const int FTL_VERSION_MAJOR = 0;
 FTL_API const int FTL_VERSION_MINOR = 9;
 FTL_API const int FTL_VERSION_MAINTENANCE = 14;
@@ -171,7 +169,7 @@ FTL_API int ftl_ingest_speed_test(ftl_handle_t *ftl_handle, int speed_kbps, int 
 
   speed_test_t results;
 
-  FTL_LOG(ftl, FTL_LOG_WARN, "%s() is depricated, please use ftl_ingest_speed_test_ex()\n", __FUNCTION__);
+  FTL_LOG(ftl, FTL_LOG_WARN, "%s() is depricated, please use ftl_ingest_speed_test_ex()", __FUNCTION__);
 
   if (media_speed_test(ftl, speed_kbps, duration_ms, &results) == FTL_SUCCESS) {
     return results.peak_kbps;
@@ -259,11 +257,11 @@ ftl_status_t internal_ingest_disconnect(ftl_stream_configuration_private_t *ftl)
   ftl_set_state(ftl, FTL_DISCONNECT_IN_PROGRESS);
 
   if ((status_code = media_destroy(ftl)) != FTL_SUCCESS) {
-    FTL_LOG(ftl, FTL_LOG_ERROR, "failed to clean up media channel with error %d\n", status_code);
+    FTL_LOG(ftl, FTL_LOG_ERROR, "failed to clean up media channel with error %d", status_code);
   }
 
   if ((status_code = _ingest_disconnect(ftl)) != FTL_SUCCESS) {
-    FTL_LOG(ftl, FTL_LOG_ERROR, "Disconnect failed with error %d\n", status_code);
+    FTL_LOG(ftl, FTL_LOG_ERROR, "Disconnect failed with error %d", status_code);
   }
 
   ftl_clear_state(ftl, FTL_DISCONNECT_IN_PROGRESS);
@@ -323,9 +321,9 @@ ftl_status_t internal_ftl_ingest_destroy(ftl_stream_configuration_private_t *ftl
       free(ftl->ingest_hostname);
     }
 
-  if (ftl->param_ingest_hostname != NULL) {
-    free(ftl->param_ingest_hostname);
-  }
+    if (ftl->param_ingest_hostname != NULL) {
+      free(ftl->param_ingest_hostname);
+    }
 
     free(ftl);
   }

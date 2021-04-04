@@ -1,3 +1,6 @@
+#ifndef __FTL_APP_DEC_OBJ
+#define __FTL_APP_DEC_OBJ
+
 #include "bitstream.h"
 
 enum nalu_type_codes
@@ -245,3 +248,5 @@ typedef struct _h264_dec_obj_t
 	struct picture_params_set_t *pps;
 	struct slice_header_t slice;
 }h264_dec_obj_t;
+
+#endif // __FTL_APP_DEC_OBJ

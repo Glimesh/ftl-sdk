@@ -38,6 +38,8 @@ ftl_status_t _init_control_connection(ftl_stream_configuration_private_t *ftl) {
   int err = 0;
   SOCKET sock = 0;
   struct addrinfo hints;
+  char socket_error_buffer[SOCKET_ERROR_MESSAGE_BUFFER];
+
   memset(&hints, 0, sizeof(hints));
   ftl_status_t retval = FTL_SUCCESS;
 
@@ -66,7 +68,8 @@ ftl_status_t _init_control_connection(ftl_stream_configuration_private_t *ftl) {
   err = getaddrinfo(ftl->ingest_hostname, ingest_port_str, &hints, &resolved_names);
   if (err != 0) {
     FTL_LOG(ftl, FTL_LOG_ERROR, "getaddrinfo failed to look up ingest address %s.", ftl->ingest_hostname);
-    FTL_LOG(ftl, FTL_LOG_ERROR, "gai error was: %s", gai_strerror(err));
+    //TODO: gai_strerror: not thread safe in windows.
+    FTL_LOG(ftl, FTL_LOG_ERROR, "getaddrinfo error was: %s", gai_strerror(err));
     return FTL_DNS_FAILURE;
   }
 
@@ -75,7 +78,7 @@ ftl_status_t _init_control_connection(ftl_stream_configuration_private_t *ftl) {
     sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
     if (sock == -1) {
       /* try the next candidate */
-      FTL_LOG(ftl, FTL_LOG_DEBUG, "failed to create socket. error: %s", get_socket_error());
+      FTL_LOG(ftl, FTL_LOG_DEBUG, "failed to create socket. error: %s", get_socket_error(socket_error_buffer, sizeof(socket_error_buffer)));
       continue;
     }
     
@@ -91,13 +94,13 @@ ftl_status_t _init_control_connection(ftl_stream_configuration_private_t *ftl) {
       continue;
     }
 
-    FTL_LOG(ftl, FTL_LOG_DEBUG, "Got IP: %s\n", ingest_ip);
+    FTL_LOG(ftl, FTL_LOG_DEBUG, "Got IP: %s", ingest_ip);
     ftl->ingest_ip = _strdup(ingest_ip);
     ftl->socket_family = p->ai_family;
 
     /* Go for broke */
     if (connect(sock, p->ai_addr, (int)p->ai_addrlen) == -1) {
-      FTL_LOG(ftl, FTL_LOG_DEBUG, "failed to connect on candidate, error: %s", get_socket_error());
+      FTL_LOG(ftl, FTL_LOG_DEBUG, "failed to connect on candidate, error: %s", get_socket_error(socket_error_buffer, sizeof(socket_error_buffer)));
       close_socket(sock);
       sock = 0;
       continue;
@@ -105,15 +108,15 @@ ftl_status_t _init_control_connection(ftl_stream_configuration_private_t *ftl) {
 
     /* If we got here, we successfully connected */
     if (set_socket_enable_keepalive(sock) != 0) {
-      FTL_LOG(ftl, FTL_LOG_DEBUG, "failed to enable keep alives.  error: %s", get_socket_error());
+      FTL_LOG(ftl, FTL_LOG_DEBUG, "failed to enable keep alives.  error: %s", get_socket_error(socket_error_buffer, sizeof(socket_error_buffer)));
     }
 
     if (set_socket_recv_timeout(sock, SOCKET_RECV_TIMEOUT_MS) != 0) {
-      FTL_LOG(ftl, FTL_LOG_DEBUG, "failed to set recv timeout.  error: %s", get_socket_error());
+      FTL_LOG(ftl, FTL_LOG_DEBUG, "failed to set recv timeout.  error: %s", get_socket_error(socket_error_buffer, sizeof(socket_error_buffer)));
     }
 
     if (set_socket_send_timeout(sock, SOCKET_SEND_TIMEOUT_MS) != 0) {
-      FTL_LOG(ftl, FTL_LOG_DEBUG, "failed to set send timeout.  error: %s", get_socket_error());
+      FTL_LOG(ftl, FTL_LOG_DEBUG, "failed to set send timeout.  error: %s", get_socket_error(socket_error_buffer, sizeof(socket_error_buffer)));
     }
 
     break;
@@ -124,8 +127,7 @@ ftl_status_t _init_control_connection(ftl_stream_configuration_private_t *ftl) {
 
   /* Check to see if we actually connected */
   if (sock <= 0) {
-    FTL_LOG(ftl, FTL_LOG_ERROR, "failed to connect to ingest. Last error was: %s",
-      get_socket_error());
+    FTL_LOG(ftl, FTL_LOG_ERROR, "failed to connect to ingest. Last error was: %s", get_socket_error(socket_error_buffer, sizeof(socket_error_buffer)));
     return FTL_CONNECT_ERROR;
   }
 
@@ -251,7 +253,7 @@ ftl_status_t _ingest_connect(ftl_stream_configuration_private_t *ftl) {
       break;
     }
 
-    FTL_LOG(ftl, FTL_LOG_INFO, "Successfully connected to ingest.  Media will be sent to port %d\n", ftl->media.assigned_port);
+    FTL_LOG(ftl, FTL_LOG_INFO, "Successfully connected to ingest.  Media will be sent to port %d", ftl->media.assigned_port);
   
     return FTL_SUCCESS;
   } while (0);
@@ -295,9 +297,9 @@ ftl_status_t _ingest_disconnect(ftl_stream_configuration_private_t *ftl) {
 
         ftl_clear_state(ftl, FTL_CONNECTED);
 
-        FTL_LOG(ftl, FTL_LOG_INFO, "light-saber disconnect\n");
+        FTL_LOG(ftl, FTL_LOG_INFO, "light-saber disconnect");
         if ((response_code = _ftl_send_command(ftl, FALSE, response, sizeof(response), "DISCONNECT", ftl->channel_id)) != FTL_INGEST_RESP_OK) {
-            FTL_LOG(ftl, FTL_LOG_ERROR, "Ingest Disconnect failed with %d (%s)\n", response_code, response);
+            FTL_LOG(ftl, FTL_LOG_ERROR, "Ingest Disconnect failed with %d (%s)", response_code, response);
         }
     }
 
@@ -376,6 +378,7 @@ static ftl_response_code_t _ftl_send_command(ftl_stream_configuration_private_t 
     }
 
     send(ftl->ingest_socket, buf, len, 0);
+    FTL_LOG(ftl, FTL_LOG_DEBUG, "send[%s]", buf);
 
     if (need_response) {
       resp_code = _ftl_get_response(ftl, response_buf, response_len);
@@ -421,11 +424,11 @@ OS_THREAD_ROUTINE control_keepalive_thread(void *data)
 
     // Send the ping to ingest now.
     if ((response_code = _ftl_send_command(ftl, FALSE, NULL, 0, "PING %d", ftl->channel_id)) != FTL_INGEST_RESP_OK) {
-      FTL_LOG(ftl, FTL_LOG_ERROR, "Ingest ping failed with %d\n", response_code);
+      FTL_LOG(ftl, FTL_LOG_ERROR, "Ingest ping failed with %d", response_code);
     }
   }
 
-  FTL_LOG(ftl, FTL_LOG_INFO, "Exited control_keepalive_thread\n");
+  FTL_LOG(ftl, FTL_LOG_INFO, "Exited control_keepalive_thread");
 
   return 0;
 }
@@ -437,6 +440,7 @@ OS_THREAD_ROUTINE connection_status_thread(void *data)
     ftl_status_msg_t status;
     struct timeval last_ping, now;
     int64_t ms_since_ping = 0;
+    char socket_error_buffer[SOCKET_ERROR_MESSAGE_BUFFER];
 
     // We ping every 5 seconds, but don't timeout the connection until 30 seconds has passed
     // without hearing anything back from the ingest. This time is high, but some some poor networks
@@ -462,7 +466,7 @@ OS_THREAD_ROUTINE connection_status_thread(void *data)
         int ret = get_socket_bytes_available(ftl->ingest_socket, &bytesAvailable);
         if (ret < 0)
         {
-            FTL_LOG(ftl, FTL_LOG_ERROR, "Failed to call get_socket_bytes_available, %s", get_socket_error());
+            FTL_LOG(ftl, FTL_LOG_ERROR, "Failed to call get_socket_bytes_available, %s", get_socket_error(socket_error_buffer, sizeof(socket_error_buffer)));
             error_code = FTL_UNKNOWN_ERROR_CODE;
         }
         else
@@ -504,7 +508,7 @@ OS_THREAD_ROUTINE connection_status_thread(void *data)
         {
             break;
         }
-        FTL_LOG(ftl, FTL_LOG_ERROR, "Ingest connection has dropped: error code %d\n", error_code);
+        FTL_LOG(ftl, FTL_LOG_ERROR, "Ingest connection has dropped: error code %d", error_code);
 
         // Clear the state that this thread is running. If we don't do this we will dead lock
         // in the internal_ingest_disconnect.

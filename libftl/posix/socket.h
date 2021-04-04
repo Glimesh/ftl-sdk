@@ -6,7 +6,7 @@ typedef int SOCKET;
 
 void init_sockets();
 int close_socket(SOCKET sock);
-char * get_socket_error();
+char * get_socket_error(char* buf, size_t buflen);
 int set_socket_recv_timeout(SOCKET socket, int ms_timeout);
 int set_socket_send_timeout(SOCKET socket, int ms_timeout);
 int set_socket_enable_keepalive(SOCKET socket);

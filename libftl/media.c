@@ -220,7 +220,7 @@ cleanup:
 int media_enable_nack(ftl_stream_configuration_private_t *ftl, uint32_t ssrc, BOOL enabled) {
   ftl_media_component_common_t *mc = NULL;
   if ((mc = _media_lookup(ftl, ssrc)) == NULL) {
-    FTL_LOG(ftl, FTL_LOG_ERROR, "Unable to find ssrc %d\n", ssrc);
+    FTL_LOG(ftl, FTL_LOG_ERROR, "Unable to find ssrc %d", ssrc);
     return -1;
   }
 
@@ -390,12 +390,12 @@ void _update_timestamp(ftl_stream_configuration_private_t *ftl, ftl_media_compon
     ftl->media.sender_report_base_ntp.tv_usec == 0)
   {
     gettimeofday(&ftl->media.sender_report_base_ntp, NULL);
-    FTL_LOG(ftl, FTL_LOG_INFO, "Sender report base ntp time set to %llu us\n", mc->payload_type, timeval_to_us(&ftl->media.sender_report_base_ntp));
+    FTL_LOG(ftl, FTL_LOG_INFO, "[#%d] Sender report base ntp time set to %llu us", mc->ssrc, timeval_to_us(&ftl->media.sender_report_base_ntp));
   }
 
   if (mc->base_dts_usec < 0) {
     mc->base_dts_usec = dts_usec;
-    FTL_LOG(ftl, FTL_LOG_INFO, "Stream (%lu) base dts set to %llu \n", mc->payload_type, dts_usec);
+    FTL_LOG(ftl, FTL_LOG_INFO, "[#%d] Stream base dts set to %llu", mc->ssrc, dts_usec);
   }
 
   // Convert the incoming dts time to the correct clock time for the timestamp.
@@ -552,8 +552,8 @@ ftl_status_t media_speed_test(ftl_stream_configuration_private_t *ftl, int speed
     results->duration_ms = (int)actual_send_time;
     results->peak_kbps = effective_kbps;
 
-    FTL_LOG(ftl, FTL_LOG_ERROR, "Sent %d bytes in %d ms; send packets %d lost %d packets; (first rtt: %d, last %d). Estimated peak bitrate %d kbps\n",
-      results->bytes_sent, results->duration_ms, results->pkts_sent, results->lost_pkts, initial_rtt, final_rtt, results->peak_kbps);
+    FTL_LOG(ftl, FTL_LOG_ERROR, "[#%d] Sent %d bytes in %d ms; send packets %d lost %d packets; (first rtt: %d, last %d). Estimated peak bitrate %d kbps",
+      mc->ssrc, results->bytes_sent, results->duration_ms, results->pkts_sent, results->lost_pkts, initial_rtt, final_rtt, results->peak_kbps);
 
     retval = FTL_SUCCESS;
   }
@@ -677,11 +677,11 @@ int media_send_video(ftl_stream_configuration_private_t *ftl, int64_t dts_usec, 
           ftl->video.wait_for_idr_frame = FALSE;
 
           if (!ftl->video.has_sent_first_frame) {
-            FTL_LOG(ftl, FTL_LOG_INFO, "Audio is ready and we have the first iframe, starting stream. (dropped %d frames)\n", mc->stats.dropped_frames);
+            FTL_LOG(ftl, FTL_LOG_INFO, "[#%d] Audio is ready and we have the first iframe, starting stream. (dropped %d frames)", mc->ssrc, mc->stats.dropped_frames);
             ftl->video.has_sent_first_frame = TRUE;
           }
           else {
-            FTL_LOG(ftl, FTL_LOG_INFO, "Got key frame, continuing (dropped %d frames)\n", mc->stats.dropped_frames);
+            FTL_LOG(ftl, FTL_LOG_INFO, "[#%d] Got key frame, continuing (dropped %d frames)", mc->ssrc, mc->stats.dropped_frames);
           }
         }
         else {
@@ -706,7 +706,7 @@ int media_send_video(ftl_stream_configuration_private_t *ftl, int64_t dts_usec, 
 
         if ((slot = _media_get_empty_slot(ftl, ssrc, sn)) == NULL) {
           if (nri) {
-            FTL_LOG(ftl, FTL_LOG_INFO, "Video queue full, dropping packets until next key frame\n");
+            FTL_LOG(ftl, FTL_LOG_INFO, "[#%d] Video queue full, dropping packets until next key frame", mc->ssrc);
             ftl->video.wait_for_idr_frame = TRUE;
           }
           os_unlock_mutex(&ftl->video.mutex);
@@ -788,7 +788,7 @@ static nack_slot_t* _media_get_empty_slot(ftl_stream_configuration_private_t *ft
   ftl_media_component_common_t *mc;
 
   if ((mc = _media_lookup(ftl, ssrc)) == NULL) {
-    FTL_LOG(ftl, FTL_LOG_ERROR, "Unable to find ssrc %d\n", ssrc);
+    FTL_LOG(ftl, FTL_LOG_ERROR, "Unable to find ssrc %d", ssrc);
     return NULL;
   }
 
@@ -819,7 +819,7 @@ static float _media_get_queue_fullness(ftl_stream_configuration_private_t *ftl, 
   ftl_media_component_common_t *mc;
 
   if ((mc = _media_lookup(ftl, ssrc)) == NULL) {
-    FTL_LOG(ftl, FTL_LOG_ERROR, "Unable to find ssrc %d\n", ssrc);
+    FTL_LOG(ftl, FTL_LOG_ERROR, "Unable to find ssrc %d", ssrc);
     return -1;
   }
 
@@ -840,6 +840,7 @@ static int _media_send_slot(ftl_stream_configuration_private_t *ftl, nack_slot_t
 
   uint8_t pkt[MAX_PACKET_BUFFER];
   int pkt_len;
+  char socket_error_buffer[SOCKET_ERROR_MESSAGE_BUFFER];
 
   os_lock_mutex(&ftl->media.mutex);
   memcpy(pkt, slot->packet, slot->len);
@@ -848,7 +849,7 @@ static int _media_send_slot(ftl_stream_configuration_private_t *ftl, nack_slot_t
 
   if ((tx_len = sendto(ftl->media.media_socket, pkt, pkt_len, 0, (struct sockaddr*) ftl->media.ingest_addr, (int)ftl->media.ingest_addrlen)) == SOCKET_ERROR)
   {
-    FTL_LOG(ftl, FTL_LOG_ERROR, "sendto() failed with error: %s", get_socket_error());
+    FTL_LOG(ftl, FTL_LOG_ERROR, "sendto() failed with error: %s", get_socket_error(socket_error_buffer, sizeof(socket_error_buffer)));
   }
   
   return tx_len;
@@ -871,6 +872,7 @@ static int _media_send_packet(ftl_stream_configuration_private_t *ftl, ftl_media
 
   os_lock_mutex(&slot->mutex);
 
+  //TODO: need routine for the error
   tx_len = _media_send_slot(ftl, slot);
 
   gettimeofday(&slot->xmit_time, NULL);
@@ -907,7 +909,7 @@ static int _nack_resend_packet(ftl_stream_configuration_private_t *ftl, uint32_t
   int tx_len = 0;
 
   if ((mc = _media_lookup(ftl, ssrc)) == NULL) {
-    FTL_LOG(ftl, FTL_LOG_ERROR, "Unable to find ssrc %d\n", ssrc);
+    FTL_LOG(ftl, FTL_LOG_ERROR, "Unable to find ssrc %d", ssrc);
     return -1;
   }
 
@@ -916,7 +918,7 @@ static int _nack_resend_packet(ftl_stream_configuration_private_t *ftl, uint32_t
   os_lock_mutex(&slot->mutex);
 
   if (slot->sn != sn) {
-    FTL_LOG(ftl, FTL_LOG_WARN, "[%d] expected sn %d in slot but found %d...discarding retransmit request", ssrc, sn, slot->sn);
+    FTL_LOG(ftl, FTL_LOG_WARN, "[#%d] expected sn %d in slot but found %d...discarding retransmit request", ssrc, sn, slot->sn);
     os_unlock_mutex(&slot->mutex);
     return 0;
   }
@@ -928,8 +930,9 @@ static int _nack_resend_packet(ftl_stream_configuration_private_t *ftl, uint32_t
   req_delay = (int)timeval_to_ms(&delta);
 
   if (mc->nack_enabled) {
+    //TODO: need routine for the error
     tx_len = _media_send_slot(ftl, slot);
-    FTL_LOG(ftl, FTL_LOG_INFO, "[%d] resent sn %d, request delay was %d ms, was part of iframe? %d", ssrc, sn, req_delay, slot->isPartOfIframe);
+    FTL_LOG(ftl, FTL_LOG_INFO, "[#%d] resent sn %d, request delay was %d ms, was part of iframe? %d", ssrc, sn, req_delay, slot->isPartOfIframe);
   }
   mc->stats.nack_requests++;
 
@@ -1059,6 +1062,7 @@ OS_THREAD_ROUTINE recv_thread(void *data)
   struct sockaddr* addrinfo;
   socklen_t addr_len, addrinfo_len;
   char remote_ip[IPVX_ADDR_ASCII_LEN];
+  char socket_error_buffer[SOCKET_ERROR_MESSAGE_BUFFER];
 
   if (ftl->socket_family == AF_INET) {
      addrinfo = (struct sockaddr *)&ipv4_addrinfo;
@@ -1071,12 +1075,12 @@ OS_THREAD_ROUTINE recv_thread(void *data)
 
 #ifdef _WIN32
   if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL)) {
-    FTL_LOG(ftl, FTL_LOG_WARN, "Failed to set recv_thread priority to THREAD_PRIORITY_TIME_CRITICAL\n");
+    FTL_LOG(ftl, FTL_LOG_WARN, "Failed to set recv_thread priority to THREAD_PRIORITY_TIME_CRITICAL");
   }
 #endif
 
   if ((buf = (unsigned char*)malloc(MAX_PACKET_BUFFER)) == NULL) {
-    FTL_LOG(ftl, FTL_LOG_ERROR, "Failed to allocate recv buffer\n");
+    FTL_LOG(ftl, FTL_LOG_ERROR, "Failed to allocate recv buffer");
     return (OS_THREAD_TYPE)-1;
   }
 
@@ -1102,7 +1106,7 @@ OS_THREAD_ROUTINE recv_thread(void *data)
     ret = recvfrom(media->media_socket, buf, MAX_PACKET_BUFFER, 0, (struct sockaddr *)addrinfo, &addr_len);
     if (ret <= 0) {
       // This shouldn't be possible, we should only be here is poll above told us there was data.
-      FTL_LOG(ftl, FTL_LOG_INFO, "recv from failed with %s\n", get_socket_error());
+      FTL_LOG(ftl, FTL_LOG_INFO, "recv from failed with %s", get_socket_error(socket_error_buffer, sizeof(socket_error_buffer)));
       continue;
     }
 
@@ -1112,7 +1116,7 @@ OS_THREAD_ROUTINE recv_thread(void *data)
 
     if (strcmp(remote_ip, ftl->ingest_ip) != 0)
     {
-      FTL_LOG(ftl, FTL_LOG_WARN, "Discarded packet from unexpected ip: %s\n", remote_ip);
+      FTL_LOG(ftl, FTL_LOG_WARN, "Discarded packet from unexpected ip: %s", remote_ip);
       continue;
     }
 
@@ -1121,7 +1125,7 @@ OS_THREAD_ROUTINE recv_thread(void *data)
     int recv_len = ret;
 
     if (recv_len < 2) {
-      FTL_LOG(ftl, FTL_LOG_WARN, "recv packet too small to parse, discarding\n");
+      FTL_LOG(ftl, FTL_LOG_WARN, "recv packet too small to parse, discarding");
       continue;
     }
 
@@ -1136,7 +1140,7 @@ OS_THREAD_ROUTINE recv_thread(void *data)
       length = ntohs(*((uint16_t*)(buf + 2)));
 
       if (recv_len < ((length + 1) * 4)) {
-        FTL_LOG(ftl, FTL_LOG_WARN, "reported len was %d but packet is only %d...discarding\n", recv_len, ((length + 1) * 4));
+        FTL_LOG(ftl, FTL_LOG_WARN, "reported len was %d but packet is only %d...discarding", recv_len, ((length + 1) * 4));
         continue;
       }
 
@@ -1189,7 +1193,7 @@ OS_THREAD_ROUTINE recv_thread(void *data)
 
   free(buf);
 
-  FTL_LOG(ftl, FTL_LOG_INFO, "Exited Recv Thread\n");
+  FTL_LOG(ftl, FTL_LOG_INFO, "Exited Recv Thread");
 
   return (OS_THREAD_TYPE)0;
 }
@@ -1212,7 +1216,7 @@ OS_THREAD_ROUTINE video_send_thread(void *data)
 
 #ifdef _WIN32
   if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL)) {
-    FTL_LOG(ftl, FTL_LOG_WARN, "Failed to set recv_thread priority to THREAD_PRIORITY_TIME_CRITICAL\n");
+    FTL_LOG(ftl, FTL_LOG_WARN, "Failed to set recv_thread priority to THREAD_PRIORITY_TIME_CRITICAL");
   }
 #endif
 
@@ -1272,7 +1276,7 @@ OS_THREAD_ROUTINE video_send_thread(void *data)
     _update_stats(ftl);
   }
 
-  FTL_LOG(ftl, FTL_LOG_INFO, "Exited Send Thread\n");
+  FTL_LOG(ftl, FTL_LOG_INFO, "Exited Video Send Thread");
   return (OS_THREAD_TYPE)0;
 }
 
@@ -1283,7 +1287,7 @@ OS_THREAD_ROUTINE audio_send_thread(void *data)
 
 #ifdef _WIN32
     if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL)) {
-        FTL_LOG(ftl, FTL_LOG_WARN, "Failed to set recv_thread priority to THREAD_PRIORITY_TIME_CRITICAL\n");
+        FTL_LOG(ftl, FTL_LOG_WARN, "Failed to set recv_thread priority to THREAD_PRIORITY_TIME_CRITICAL");
     }
 #endif
 
@@ -1298,7 +1302,7 @@ OS_THREAD_ROUTINE audio_send_thread(void *data)
         _media_send_packet(ftl, audio);
     }
 
-    FTL_LOG(ftl, FTL_LOG_INFO, "Exited Audio Send Thread\n");
+    FTL_LOG(ftl, FTL_LOG_INFO, "Exited Audio Send Thread");
     return (OS_THREAD_TYPE)0;
 }
 
@@ -1453,6 +1457,7 @@ OS_THREAD_ROUTINE ping_thread(void *data) {
     {
         ping->xmit_time.tv_sec = currentTime.tv_sec;
         ping->xmit_time.tv_usec = currentTime.tv_usec;
+        //TODO: need routine for the error
         _media_send_slot(ftl, &pingSlot);
     }
 
@@ -1501,13 +1506,14 @@ OS_THREAD_ROUTINE ping_thread(void *data) {
                 senderReport->ntpTimestampLow = htonl((uint32_t)(ntpTimestamp));
 
                 // Send the report
+                //TODO: need routine for the error
                 _media_send_slot(ftl, &senderReportSlot);
             }
         }
     }
   }
 
-  FTL_LOG(ftl, FTL_LOG_INFO, "Exited Ping Thread\n");
+  FTL_LOG(ftl, FTL_LOG_INFO, "Exited Ping Thread");
 
   return 0;
 }

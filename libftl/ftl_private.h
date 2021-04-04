@@ -82,6 +82,7 @@
 #define SENDER_REPORT_TX_INTERVAL_MS 1000
 #define PING_PTYPE 250
 #define SENDER_REPORT_PTYPE 200
+#define SOCKET_ERROR_MESSAGE_BUFFER 1024
 
  // Adaptive bitrate constants
 
@@ -411,9 +412,6 @@ int ftl_read_media_port(const char *response_str);
 /**
  * Platform abstractions
  **/
-
-// FIXME: make this less global
-extern char error_message[1000];
 
 ftl_status_t _log_response(ftl_stream_configuration_private_t *ftl, int response_code);
 void ftl_set_state(ftl_stream_configuration_private_t *ftl, ftl_state_t state);

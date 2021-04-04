@@ -1,3 +1,4 @@
+#define __FTL_INTERNAL
 #include "ftl.h"
 #include "ftl_private.h"
 #ifndef DISABLE_AUTO_INGEST
@@ -5,16 +6,12 @@
 #include <jansson.h>
 #endif
 
-static int _ingest_lookup_ip(const char *ingest_location, char ***ingest_ip);
-static int _ping_server(const char *ip, int port);
-OS_THREAD_ROUTINE _ingest_get_rtt(void *data);
-
 typedef struct {
     ftl_ingest_t *ingest;
     ftl_stream_configuration_private_t *ftl;
 }_tmp_ingest_thread_data_t;
 
-static int _ping_server(const char *hostname, int port) {
+static int _ping_server(ftl_stream_configuration_private_t* ftl, const char *hostname, int port) {
 
   SOCKET sock;
   struct addrinfo hints;
@@ -25,7 +22,9 @@ static int _ping_server(const char *hostname, int port) {
   struct addrinfo* p = 0;
   int err = 0;
   int off = 0;
+  char socket_error_buffer[SOCKET_ERROR_MESSAGE_BUFFER];
 
+  memset(&dummy, 0, sizeof(dummy));
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = PF_UNSPEC;
   hints.ai_socktype = SOCK_DGRAM;
@@ -54,7 +53,7 @@ static int _ping_server(const char *hostname, int port) {
       gettimeofday(&start, NULL);
 
       if (sendto(sock, dummy, sizeof(dummy), 0, p->ai_addr, (int)p->ai_addrlen) == SOCKET_ERROR) {
-        printf("Sendto error: %s\n", get_socket_error());
+        FTL_LOG(ftl, FTL_LOG_ERROR, "Failed to call sendto, %s", get_socket_error(socket_error_buffer, sizeof(socket_error_buffer)));
         break;
       }
 
@@ -85,14 +84,14 @@ OS_THREAD_ROUTINE _ingest_get_rtt(void *data) {
     
     ingest->rtt = 1000;
     
-    if ((ping = _ping_server(ingest->name, INGEST_PING_PORT)) >= 0) {
+    if ((ping = _ping_server(ftl, ingest->name, INGEST_PING_PORT)) >= 0) {
         ingest->rtt = ping;
     }
 
     return 0;
 }
 
-ftl_status_t ftl_find_closest_available_ingest(const char* ingestHosts[], int ingestsCount, char* bestIngestHostComputed)
+FTL_API ftl_status_t ftl_find_closest_available_ingest(const char* ingestHosts[], int ingestsCount, char* bestIngestHostComputed)
 {
     if (ingestHosts == NULL || ingestsCount <= 0) {
       return FTL_UNKNOWN_ERROR_CODE;
@@ -202,20 +201,17 @@ ftl_status_t ftl_find_closest_available_ingest(const char* ingestHosts[], int in
 }
 
 #ifndef DISABLE_AUTO_INGEST
-OS_THREAD_ROUTINE _ingest_get_hosts(ftl_stream_configuration_private_t *ftl);
-
 static size_t _curl_write_callback(void *contents, size_t size, size_t nmemb, void *userp)
 {
   size_t realsize = size * nmemb;
   struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-
-  mem->memory = realloc(mem->memory, mem->size + realsize + 1);
-  if (mem->memory == NULL) {
+  void* resized_memory = realloc(mem->memory, mem->size + realsize + 1);
+  if (resized_memory == NULL) {
     /* out of memory! */
     printf("not enough memory (realloc returned NULL)\n");
     return 0;
   }
-
+  mem->memory = resized_memory;
   memcpy(&(mem->memory[mem->size]), contents, realsize);
   mem->size += realsize;
   mem->memory[mem->size] = 0;
@@ -223,7 +219,7 @@ static size_t _curl_write_callback(void *contents, size_t size, size_t nmemb, vo
   return realsize;
 }
 
-OS_THREAD_ROUTINE _ingest_get_hosts(ftl_stream_configuration_private_t *ftl) {
+int _ingest_get_hosts(ftl_stream_configuration_private_t *ftl) {
   CURL *curl_handle;
   CURLcode res;
   struct MemoryStruct chunk;
@@ -279,21 +275,24 @@ OS_THREAD_ROUTINE _ingest_get_hosts(ftl_stream_configuration_private_t *ftl) {
   curl_easy_setopt(curl_handle, CURLOPT_SSL_ENABLE_ALPN, 0);
 #endif
 
+  FTL_LOG(ftl, FTL_LOG_DEBUG, "ingestBestUrl [%s]", ingestBestUrl);
   res = curl_easy_perform(curl_handle);
 
   if (res != CURLE_OK) {
-    printf("curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+    FTL_LOG(ftl, FTL_LOG_ERROR, "_ingest_get_hosts:curl_easy_perform() failed: %s", curl_easy_strerror(res));
     goto cleanup;
   }
 
   if ((ingests = json_loadb(chunk.memory, chunk.size, 0, &error)) == NULL) {
+    FTL_LOG(ftl, FTL_LOG_ERROR, "_ingest_get_hosts:json_loadb() failed");
     goto cleanup;
   }
   
   ingest_array = json_object_get(ingests, "ingests");
   
   size_t size = json_array_size(ingest_array);
-  
+  FTL_LOG(ftl, FTL_LOG_DEBUG, "array size %d", size);
+
   for (i = 0; i < size; i++) {
     char *name = NULL;
     ingest_item = json_array_get(ingest_array, i);    
@@ -308,6 +307,8 @@ OS_THREAD_ROUTINE _ingest_get_hosts(ftl_stream_configuration_private_t *ftl) {
     }
 
     ingest_elmt->name = _strdup(name);
+    FTL_LOG(ftl, FTL_LOG_DEBUG, "ingest_elmt {name:%s}", ingest_elmt->name);
+
     ingest_elmt->rtt = 500;
     ingest_elmt->next = NULL;
 
@@ -324,7 +325,7 @@ OS_THREAD_ROUTINE _ingest_get_hosts(ftl_stream_configuration_private_t *ftl) {
     }
 
     total_ingest_cnt++;
- }
+  }
 
 cleanup:
   free(chunk.memory);
@@ -357,6 +358,7 @@ char * ingest_find_best(ftl_stream_configuration_private_t *ftl) {
   if (_ingest_get_hosts(ftl) <= 0) {
     return NULL;
   }
+  FTL_LOG(ftl, FTL_LOG_INFO, "ingest count %d", ftl->ingest_count);
 
   if ((handle = (OS_THREAD_HANDLE *)malloc(sizeof(OS_THREAD_HANDLE) * ftl->ingest_count)) == NULL) {
     return NULL;
@@ -398,7 +400,7 @@ char * ingest_find_best(ftl_stream_configuration_private_t *ftl) {
   timeval_subtract(&delta, &stop, &start);
   int ms = (int)timeval_to_ms(&delta);
 
-  FTL_LOG(ftl, FTL_LOG_INFO, "It took %d ms to query all ingests\n", ms);
+  FTL_LOG(ftl, FTL_LOG_INFO, "It took %d ms to query all ingests", ms);
 
   elmt = ftl->ingest_list;
   for (i = 0; i < ftl->ingest_count && elmt != NULL; i++) {
@@ -413,7 +415,7 @@ char * ingest_find_best(ftl_stream_configuration_private_t *ftl) {
   free(data);
 
   if (best){
-    FTL_LOG(ftl, FTL_LOG_INFO, "%s had the shortest RTT of %d ms\n", best->name, best->rtt);
+    FTL_LOG(ftl, FTL_LOG_INFO, "%s had the shortest RTT of %d ms", best->name, best->rtt);
     return _strdup(best->name);
   }
   return NULL;

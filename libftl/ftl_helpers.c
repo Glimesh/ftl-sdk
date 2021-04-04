@@ -267,10 +267,13 @@ ftl_status_t _set_ingest_hostname(ftl_stream_configuration_private_t *ftl) {
 
   do {
 #ifndef DISABLE_AUTO_INGEST
-      if (strcmp(ftl->param_ingest_hostname, "auto") == 0) {
+    if (strcmp(ftl->param_ingest_hostname, "auto") == 0) {
       ftl->ingest_hostname = ingest_find_best(ftl);
+      if (!ftl->ingest_hostname) {
+        ret_status = FTL_CONNECT_ERROR;
       }
-      else
+    }
+    else
 #endif
     ftl->ingest_hostname = _strdup(ftl->param_ingest_hostname);
   } while (0);

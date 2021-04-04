@@ -38,21 +38,23 @@ int shutdown_socket(SOCKET sock, int how) {
   return shutdown(sock, how);
 }
 
-char * get_socket_error() {
+char * get_socket_error(char* buf, size_t buflen) {
   int error_code = WSAGetLastError();
 
-  if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM,
-                    NULL, 
+  if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM
+                    | FORMAT_MESSAGE_IGNORE_INSERTS
+                    | FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                    NULL,
                     error_code,
-                    0, 
-                    (LPTSTR)&error_message,
-                    1000,
+                    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                    (LPTSTR)buf,
+                    buflen,
                     NULL) == 0) {
     // Err, oops, formatmessage failed -_-;
     return "FormatMessage() failed to process error!";
   }
 
-  return error_message;
+  return buf;
 }
 
 int set_socket_recv_timeout(SOCKET socket, int ms_timeout){
